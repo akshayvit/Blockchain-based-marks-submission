@@ -1,0 +1,12 @@
+
+table {
+    background-color: yellow;
+    margin: 4px;
+}
+
+div {
+    width:100%;
+    background-color: blue;
+    position: fixed;
+    color: white;
+}
