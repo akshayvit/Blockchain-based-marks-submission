@@ -11,4 +11,7 @@
     
     <p>You have {{ status }} the marks.</p>
     <p><a href='/members'>Go Back</a>and {{ next_status }}</p>
+    {% if next_status!='try again' and status=='not succesfully sent' %}
+      <p><a href='/publish'>Publish now</a></p>
+    {% endif %}
 </body>

@@ -5,6 +5,7 @@ from django.urls import reverse
 from . import blockchain
 from django.contrib import messages
 from django.shortcuts import render
+import faust
 
 marks_list=[]
 
@@ -13,8 +14,8 @@ def showform(request):
         memberlist=members.objects.all().order_by("-marks").values()
         mlist=members.objects.all().order_by("-marks")
         for i in mlist:
-            if(len(i.marks)>0):
-                marks_list.append(int(i.marks))
+            if(len(i.marks)>0 and len(i.roll)>0):
+                marks_list.append([int(i.roll),int(i.marks)])
         context={'memberlist':memberlist}
     except Exception as e:
         print(e)
@@ -27,7 +28,6 @@ def adddata(request):
     roll=request.GET['roll']
     name=request.GET['name']
     marks=request.GET['marks']
-    marks_list.append(int(marks))
     mem=members(roll=roll,name=name,marks=marks)
     mem.save()
     return HttpResponseRedirect(reverse('members_info'))
@@ -41,33 +41,37 @@ def updatedata(request,roll):
     try:
         mem=members.objects.get(roll=roll)
         mem.marks=str(int(mem.marks)+1)
-        marks_list.append(1)
         mem.save()
     except Exception as e:
         print(e)
     return HttpResponseRedirect(reverse('members_info'))
 
 blockchain=blockchain.Blockchain(str(sum(marks_list)/(len(marks_list)+1)))
-'''
-import faust
-
-app = faust.App('members_info', broker='kafka://localhost')
 
 
-@app.agent(value_type=members)
-async def getmatks(marks):
-    async for mark in marks:
-        print(f'Submission for {mark.roll}: {mark.marks}')
+def publish(request):
+    global marks_list
+    try:
+        app = faust.App('member-marks',broker='kafka://localhost:9092', store='rocksdb://')
+        channel = app.channel(value_type=list)
+        marks_list=marks_list.sort(reverse=True)
+        @app.agent(channel)
+        async def greet(marks):
+            rank=1
+            async for mark in marks:
+                with open('marks.txt','w+') as f:
+                    f.write(str(rank)+" "+str(mark[0])+" "+str(mark[1]))
+                f.close()
+                rank+=1
+        @app.timer(1.0)
+        async def populate():
+            await channel.publish_message(marks_list)
+        print(channel.subscriber_count)
+        return render(request,'submitted.html',{'status':'Published','next_status':'close it now.'})
+    except Exception as e:
+        print(e)
+        return render(request,'submitted.html',{'status':'Not published','next_status':'try again.'})
 
-kafka_topic = app.topic('marks', key_type=str, value_type=int)
-marklist = app.Table('marks', default=int)
-
-
-@app.agent(kafka_topic)
-async def marklistsub(markstlist):
-    async for roll, marks in markstlist.items():
-        marklist[roll] += marks
-'''
 
 def mine_block(request):
    # global blockchain
