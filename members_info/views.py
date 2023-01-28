@@ -4,6 +4,7 @@ from members_info.models import members
 from django.urls import reverse
 from . import blockchain
 from django.contrib import messages
+from django.shortcuts import render
 
 marks_list=[]
 
@@ -47,6 +48,26 @@ def updatedata(request,roll):
     return HttpResponseRedirect(reverse('members_info'))
 
 blockchain=blockchain.Blockchain(str(sum(marks_list)/(len(marks_list)+1)))
+'''
+import faust
+
+app = faust.App('members_info', broker='kafka://localhost')
+
+
+@app.agent(value_type=members)
+async def getmatks(marks):
+    async for mark in marks:
+        print(f'Submission for {mark.roll}: {mark.marks}')
+
+kafka_topic = app.topic('marks', key_type=str, value_type=int)
+marklist = app.Table('marks', default=int)
+
+
+@app.agent(kafka_topic)
+async def marklistsub(markstlist):
+    async for roll, marks in markstlist.items():
+        marklist[roll] += marks
+'''
 
 def mine_block(request):
    # global blockchain
@@ -57,8 +78,8 @@ def mine_block(request):
         previous_hash=blockchain.hash(previous_block)
         block=blockchain.create_block(proof,previous_hash)
         response={'message':'Congo you mined a block!!!!','index':block['index'],'timestamp':block['timestamp'],'proof':block['proof'],'previous_hash':block['previous_hash']}
-        messages.success(request,'Congo!!! Got your entry.')
-        return HttpResponseRedirect(reverse('members_info'))
+        messages.add_message(request, messages.SUCCESS,'Congo!!! Your entry is entered.', extra_tags='ex-tag')
+        return render(request,'submitted.html',{'status':'submitted','next_status':'Confirm and Send'})
     except Exception as e:
         print(e)
     
@@ -68,7 +89,5 @@ def is_valid(request):
    # global blockchain
     response={"validity":blockchain.is_chain_valid(blockchain.chain)}
     if(response['validity']==True):
-        messages.success(request,'Successfully Got the Marks Entry.')
-    else:
-        messages.error(request,'OOPS!!! Something issue. Try back again after sometimes.')
-    return HttpResponseRedirect(reverse('members_info'))
+        return render(request,'submitted.html',{'status':'confirmed and sent','next_status':'can Add more entries'})
+    return render(request,'submitted.html',{'status':'not succesfully sent','next_status':'try again'})
